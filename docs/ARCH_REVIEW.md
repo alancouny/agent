@@ -95,4 +95,5 @@
 | 测试基线 | ✅ | 后端 203/203、前端 124/124、双端 tsc 0 错误 |
 
 交付文档：DESIGN_DEEP_TIER.md。
-已知遗留：① `@napi-rs/keyring` 未安装，`OsKeyStore` 当前回退 `FileKeyStore`，安装依赖后自动启用系统钥匙串；② 中等档已知遗留（见上）仍低危未处理；③ `git.test.ts` 原误假设 `backend/` 非仓库，已加固为 repo 自适断言（非逻辑回归）。
+已知遗留：① 中等档已知遗留（见上）仍低危未处理；② `git.test.ts` 原误假设 `backend/` 非仓库，已加固为 repo 自适断言（非逻辑回归）。
+后续跟进（2026-08-25）：`@napi-rs/keyring` v1.3 已安装并启用系统钥匙串（macOS Keychain；v1.3 主导出为同步 `Entry` API，`OsKeyStore` 已适配）；测试套件经 `AGENT_KEY_STORE=file` 强制文件存储隔离，不触碰真实钥匙串；后端基线更新为 205/205。

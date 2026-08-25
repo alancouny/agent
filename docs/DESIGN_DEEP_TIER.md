@@ -168,11 +168,14 @@ if (created) { /* 仅在首次生成时明文打印到控制台 */ }
 else { logger.info('Using persisted AGENT_API_KEY from secure storage'); }
 ```
 
-**当前落地状态**：
-- `FileKeyStore` 默认启用，密钥以 `0600` 权限落盘 `data/.agent_key`，替代原先「随机生成即忘」的无持久化状态。
-- `OsKeyStore` 已就绪，但因 `@napi-rs/keyring` 尚未安装，当前路径在懒加载失败时回退 `FileKeyStore`。待 `npm i @napi-rs/keyring`（或 Tauri 集成）后自动启用系统钥匙串。
+**当前落地状态（2026-08-25 已启用系统钥匙串）**：
+- `@napi-rs/keyring` v1.3 已安装，`OsKeyStore` 实际生效，密钥写入 macOS Keychain（service `ai-agent-app` / account `agent-api-key`），跨重启稳定。
+- **API 适配说明**：v1.3 主导出为同步 `Entry` 类（`new Entry(service, account)` → `getPassword()/setPassword()`），并非旧 keytar 风格顶层函数（兼容层里是 async，与 `KeyStore` 同步接口不匹配）——`OsKeyStore` 已改用 `Entry` API。
+- `FileKeyStore`（0600，`data/.agent_key`，`AGENT_KEY_FILE` 可覆盖）保留为兜底：keyring 模块缺失或钥匙串操作失败（无 keychain / 权限拒绝）时静默回退。
+- **测试隔离**：`AGENT_KEY_STORE=file` 强制文件存储（`preload.mjs` 设置），测试套件不向真实钥匙串读写 key。
+- `server.ts` `ensureApiKey()`：仅 `created`（首次生成）时明文打印 key，否则记 `Using persisted AGENT_API_KEY from secure storage`。
 
-**验证**：新增 `tests/keystore.test.ts`（覆盖 `getOrCreate` 幂等、权限、回退、测试重置）。
+**验证**：新增 `tests/keystore.test.ts`（`getOrCreate` 幂等、0600 权限、`Entry` API 回退、`AGENT_KEY_STORE=file` 隔离）。
 
 ---
 
@@ -180,7 +183,7 @@ else { logger.info('Using persisted AGENT_API_KEY from secure storage'); }
 
 | 维度 | 结果 |
 |---|---|
-| 后端测试 | **203/203** 通过（含新增 `event-bus` / `keystore`；`git.test.ts` 加固为 repo 自适） |
+| 后端测试 | **205/205** 通过（含新增 `event-bus` / `keystore`；`git.test.ts` 加固为 repo 自适） |
 | 后端 tsc | 0 错误 |
 | 前端测试 | **124/124** 通过（含新增 `useAppStore` 4 用例） |
 | 前端 tsc | 0 错误 |
@@ -193,5 +196,5 @@ else { logger.info('Using persisted AGENT_API_KEY from secure storage'); }
 ## 八、风险与遗留
 
 1. **`git.test.ts` 历史误假设**：原用例假设 `backend/` 非 git 仓库，因项目根 `git init` 后该前提永久失效。已改为按实际环境（`git rev-parse --is-inside-work-tree`）断言，repo 内外均绿——属测试加固，非逻辑回归。
-2. **系统钥匙串待启用**：`@napi-rs/keyring` 未安装，`OsKeyStore` 当前回退 `FileKeyStore`；安装依赖后即自动升级为 OS keychain。
+2. **系统钥匙串已启用**（2026-08-25）：`@napi-rs/keyring` v1.3 已安装并适配（同步 `Entry` API）；若需禁用钥匙串可用 `AGENT_KEY_STORE=file` 强制文件存储（测试亦用此开关隔离）。
 3. **中等档已知遗留（低危，未在本档处理）**：SkillsPanel try/finally 无 catch、SkillsPanel/LLMFlameChart `apiFetch` 裸 `/api` 路径、McpPanel 白名单 UI 硬编码中文、审批开关双入口（GeneralSection/ModelManager）、client 拦截器/SSE 无直接单测、SSE 401 无提示。

@@ -59,15 +59,26 @@ export class FileKeyStore implements KeyStore {
 /**
  * OS 密钥库（可选后端）：若安装 @napi-rs/keyring 则使用系统钥匙串（macOS Keychain /
  * Windows Credential Manager / Linux libsecret），否则回退文件持久化。
- * 通过 createRequire 同步加载原生模块；缺失时静默回退。
+ * 通过 createRequire 同步加载原生模块；缺失或操作失败时静默回退。
+ *
+ * API 说明：@napi-rs/keyring v1.3 主导出为同步 `Entry` 类
+ * （new Entry(service, account) → entry.getPassword()/setPassword()）；
+ * 旧 keytar 兼容层为 async 函数，与 KeyStore 同步接口不匹配，故采用 Entry。
  */
-class OsKeyStore implements KeyStore {
+export class OsKeyStore implements KeyStore {
   private fallback = new FileKeyStore();
+  private entry: any | null = null;
   constructor(private kr: any) {}
+
+  /** 惰性创建 Entry：构造/访问失败（无钥匙串、权限拒绝等）统一抛给调用方 try/catch 回退。 */
+  private getEntry(): any {
+    if (!this.entry) this.entry = new this.kr.Entry(KEYRING_SERVICE, KEYRING_ACCOUNT);
+    return this.entry;
+  }
 
   get(): string | null {
     try {
-      return this.kr.getPassword(KEYRING_ACCOUNT) || null;
+      return this.getEntry().getPassword() ?? null;
     } catch {
       return this.fallback.get();
     }
@@ -75,10 +86,11 @@ class OsKeyStore implements KeyStore {
 
   getOrCreate(): { key: string; created: boolean } {
     try {
-      const existing = this.kr.getPassword(KEYRING_ACCOUNT);
+      const entry = this.getEntry();
+      const existing = entry.getPassword();
       if (existing) return { key: existing, created: false };
       const key = `agent-${randomBytes(24).toString('hex')}`;
-      this.kr.setPassword(KEYRING_ACCOUNT, key);
+      entry.setPassword(key);
       return { key, created: true };
     } catch {
       return this.fallback.getOrCreate();
@@ -100,7 +112,8 @@ let singleton: KeyStore | null = null;
 /** 返回全局 keystore 单例（OS 钥匙串优先，缺失回退文件）。 */
 export function getKeyStore(): KeyStore {
   if (singleton) return singleton;
-  const kr = loadKeyringModule();
+  // 测试隔离：AGENT_KEY_STORE=file 强制文件存储，避免测试写入真实系统钥匙串
+  const kr = process.env.AGENT_KEY_STORE === 'file' ? null : loadKeyringModule();
   singleton = kr ? new OsKeyStore(kr) : new FileKeyStore();
   return singleton;
 }

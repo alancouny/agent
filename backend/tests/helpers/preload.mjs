@@ -12,3 +12,6 @@
 // registered, so ordering between --import flags is irrelevant.
 
 process.env.AGENT_DB_PATH = ':memory:';
+// 密钥隔离：强制 FileKeyStore，避免测试套件（import server.ts 时 ensureApiKey()
+// 会调用 getKeyStore().getOrCreate()）向真实系统钥匙串写入/读取 key。
+process.env.AGENT_KEY_STORE = 'file';
