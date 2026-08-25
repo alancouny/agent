@@ -4,7 +4,6 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import rateLimit from 'express-rate-limit';
 import path from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { logger } from './utils/logger.js';
 import { safeErrorMessage } from './utils/error-mask.js';
@@ -42,27 +41,35 @@ import { createMcpMemoryProvider } from './memory/mcp.js';
 import { registerMemoryProvider } from './memory/registry.js';
 import './memory/tools.js';
 import { getDb, closeDb } from './db/database.js';
+import { getKeyStore } from './security/keystore.js';
 import { computerUseManager } from './computer-use/manager.js';
 
 dotenv.config();
 
 // ── 决策 A（R4 前置 #23）：默认强制鉴权 ─────────────────────────────
-// 启动时无 AGENT_API_KEY 自动生成随机 key（每次启动变化），并在控制台醒目打印；
-// auth 中间件无条件挂载，无鉴权请求一律 401（默认环境也成立）。
+// D4：keychain 化 —— 无 AGENT_API_KEY 时从安全存储（OS 钥匙串优先，回退 0600 文件）
+// 读取/生成 key。key 跨重启稳定，仅首次创建时打印到控制台，避免每次启动泄露/重置。
 let API_KEY = '';
 export function ensureApiKey(): string {
   if (API_KEY) return API_KEY;
   const envKey = process.env.AGENT_API_KEY?.trim();
   if (envKey) {
     API_KEY = envKey;
-  } else {
-    API_KEY = `agent-${randomBytes(24).toString('hex')}`;
+    return API_KEY;
+  }
+  const store = getKeyStore();
+  const { key, created } = store.getOrCreate();
+  API_KEY = key;
+  if (created) {
     logger.warn(
       `\n==================================================\n` +
-        `  AGENT_API_KEY: ${API_KEY}\n` +
-        `  (ephemeral key generated at startup — set AGENT_API_KEY env var for a stable key)\n` +
+        `  AGENT_API_KEY (newly generated & persisted): ${API_KEY}\n` +
+        `  (saved to secure storage — stable across restarts.\n` +
+        `   set AGENT_API_KEY env var to use your own key)\n` +
         `==================================================`
     );
+  } else {
+    logger.info('Using persisted AGENT_API_KEY from secure storage (stable across restarts).');
   }
   return API_KEY;
 }

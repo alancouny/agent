@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { logger } from '../utils/logger';
 import { apiFetch } from '../api/client';
+import { useAppStore } from '../store/useAppStore';
 
 const TEXT_EXTS = new Set([
   '.ts', '.tsx', '.js', '.jsx', '.json', '.md', '.css', '.scss', '.sass', '.less',
@@ -51,19 +52,9 @@ interface TreeItem extends FileEntry {
   loading?: boolean;
 }
 
-interface ApiSettings {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  format: 'openai' | 'anthropic';
-}
-
-const STORAGE_KEY = 'agent_api_settings';
-
 function getApiBase(): string {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    const settings: ApiSettings | null = saved ? JSON.parse(saved) : null;
+    const settings = useAppStore.getState().apiSettings;
     if (settings && settings.baseUrl) {
       return settings.baseUrl.replace(/\/v1$/, '').replace(/\/$/, '') + '/api';
     }

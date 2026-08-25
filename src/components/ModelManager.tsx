@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 import { modelProviderApi, apiFetch } from '../api/client';
 import { apiUrl } from '../apiConfig';
-import { useLocalStorage } from '../hooks/useLocalStorage';
+import { useAppStore } from '../store/useAppStore';
 import type { ModelProvider, ProviderConfig, CustomProviderCreateRequest, ApiSettings } from '../types';
 const APPROVAL_STORAGE = 'agent_approval_enabled';
 
@@ -41,13 +41,8 @@ function Toggle({ checked, onChange, label, desc, icon: Icon }: {
 
 export function ModelManager({ onSettingsUpdate }: { onSettingsUpdate: (s: ApiSettings) => void }) {
   const { t } = useTranslation();
-  // AgentChat 侧使用的 API 配置（从本机持久化读取；provider 界面负责具体的密钥/地址管理）
-  const [settings] = useLocalStorage<ApiSettings>('agent_api_settings', {
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: '',
-    model: 'gpt-4o',
-    format: 'openai',
-  });
+  // D3：API 配置统一来自全局 store（单一数据源，persist 持久化）
+  const settings = useAppStore((s) => s.apiSettings);
   const [approvalEnabled, setApprovalEnabled] = useState(true);
 
   // ── Provider 管理（原 Settings → Model Providers / Custom Providers）──

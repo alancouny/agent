@@ -17,6 +17,7 @@ import type {
 } from './hooks.js';
 import { search as kbSearch, getConfig } from '../knowledge/store.js';
 import { sessionEvents } from '../session/events.js';
+import { AgentEventBus } from './event-bus.js';
 
 const DEFAULT_SYSTEM_PROMPT = `You are a helpful AI assistant with access to tools.
 When you need to use a tool, call it with the correct parameters. Use the result to answer the user. You can use multiple tools in sequence. Explain what you're doing.
@@ -301,7 +302,13 @@ export class AgentCore {
     }
   }
 
-  async *run(userMessage: string): AsyncGenerator<AgentStreamEvent> {
+  /**
+   * 运行一轮 agent loop。事件通过 eventBus 广播（解耦传输层），不再 yield 生成器。
+   * 调用方（SSE 路由）创建 AgentEventBus 并订阅 'event' channel 即可消费全部事件。
+   */
+  async run(userMessage: string, opts?: { eventBus?: AgentEventBus }): Promise<void> {
+    const bus = opts?.eventBus ?? new AgentEventBus();
+    const emit = (event: AgentStreamEvent) => bus.emitEvent(event);
     this.turnIdx += 1;
     this.stepIdx = 0;
     this.messages.push({ role: 'user', content: userMessage });
@@ -334,7 +341,7 @@ export class AgentCore {
     });
     if (beforeRunRes.aborted) {
       this.logEvent('error', { content: `Hook aborted before run: ${beforeRunRes.message}` });
-      yield { type: 'error', error: `Hook aborted before run: ${beforeRunRes.message}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+      emit({ type: 'error', error: `Hook aborted before run: ${beforeRunRes.message}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
       return;
     }
 
@@ -345,7 +352,7 @@ export class AgentCore {
         return;
       }
       this.stepIdx = iteration + 1;
-      yield { type: 'thinking', content: `Iteration ${iteration + 1}/${this.config.maxIterations}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+      emit({ type: 'thinking', content: `Iteration ${iteration + 1}/${this.config.maxIterations}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
 
       // 每个 turn 开始时重置连续失败计数（跨 turn 重新评估）
       this.resetFailureCounters();
@@ -353,7 +360,7 @@ export class AgentCore {
       // Steering: user messages sent mid-run are injected before the next model call.
       const steered = this.drainSteering();
       for (const s of steered) {
-        yield { type: 'thinking', content: `Steering: "${s.slice(0, 120)}" injected before next step`, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'thinking', content: `Steering: "${s.slice(0, 120)}" injected before next step`, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         this.logEvent('steer', { role: 'user', content: s });
       }
 
@@ -362,7 +369,7 @@ export class AgentCore {
       const compressResult = await maybeCompress(this, this.config.contextWindow, currentTokens);
       if (compressResult.compressed) {
         this.logEvent('context_compressed', { content: JSON.stringify(compressResult) });
-        yield {
+        emit({
           type: 'context_compressed',
           turnIdx: this.turnIdx,
           stepIdx: this.stepIdx,
@@ -373,7 +380,7 @@ export class AgentCore {
             layers: compressResult.layerBreakdown as any,
             usageRatio: currentTokens / (this.config.contextWindow || 128000),
           },
-        };
+        });
       }
 
       // ── Hook: beforeModelCall ──
@@ -393,7 +400,7 @@ export class AgentCore {
       });
       if (beforeModelRes.aborted) {
         this.logEvent('error', { content: `Hook aborted before model call: ${beforeModelRes.message}` });
-        yield { type: 'error', error: `Hook aborted before model call: ${beforeModelRes.message}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'error', error: `Hook aborted before model call: ${beforeModelRes.message}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         return;
       }
 
@@ -415,7 +422,7 @@ export class AgentCore {
           this.currentLlmCallId = null;
         }
         this.logEvent('error', { content: 'Failed to get response from LLM' });
-        yield { type: 'error', error: 'Failed to get response from LLM (callLLM returned null)', turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'error', error: 'Failed to get response from LLM (callLLM returned null)', turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         return;
       }
 
@@ -438,7 +445,7 @@ export class AgentCore {
       }
       if (!content && !toolCalls.length) {
         this.logEvent('error', { content: 'Empty LLM response' });
-        yield { type: 'error', error: 'Empty LLM response', turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'error', error: 'Empty LLM response', turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         return;
       }
 
@@ -452,7 +459,7 @@ export class AgentCore {
       });
       if (afterModelRes.aborted) {
         this.logEvent('error', { content: `Hook aborted after model call: ${afterModelRes.message}` });
-        yield { type: 'error', error: `Hook aborted after model call: ${afterModelRes.message}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'error', error: `Hook aborted after model call: ${afterModelRes.message}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         return;
       }
       // Hook 可修改 toolCalls（比如过滤掉不允许的工具调用）
@@ -478,14 +485,14 @@ export class AgentCore {
       if (content) {
         this.logEvent('text', { role: 'assistant', content });
         if (normalizedUsage?.totalTokens) this.runTotalTokens += normalizedUsage.totalTokens;
-        yield { type: 'text', content, usage: normalizedUsage, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'text', content, usage: normalizedUsage, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
       }
 
       if (routedToolCalls.length === 0) {
         this.messages.push({ role: 'assistant', content });
         this.saveMemory(userMessage, content);
         this.logEvent('complete');
-        yield { type: 'complete', turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'complete', turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         this.saveSession();
         return;
       }
@@ -524,7 +531,7 @@ export class AgentCore {
         const completed = await Promise.all(started);
         for (const item of completed) {
           if (item.approval) {
-            yield { type: 'approval_pending', approval: item.approval, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+            emit({ type: 'approval_pending', approval: item.approval, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
           }
           results.push({ tc: item.tc, output: item.output, error: item.error });
         }
@@ -540,12 +547,12 @@ export class AgentCore {
           name: r.tc.function.name,
         });
         this.actualToolCallsCount += 1;
-        yield { type: 'tool_result', toolResult: { name: r.tc.function.name, result: r.output }, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+        emit({ type: 'tool_result', toolResult: { name: r.tc.function.name, result: r.output }, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
 
         // 发射 file_modified 事件（write_file / run_code 写文件时）
         const fm = this.extractFileModified(r.tc.function.name, r.tc.function.arguments, r.output);
         if (fm) {
-          yield { type: 'file_modified', fileModified: fm, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+          emit({ type: 'file_modified', fileModified: fm, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         }
 
         // 死循环检测：累计同一工具的连续失败次数
@@ -581,12 +588,12 @@ export class AgentCore {
 
     this.lessonNotes.push('max iterations reached (agent looped without converging)');
     this.logEvent('error', { content: 'Max iterations reached' });
-    yield { type: 'error', error: 'Max iterations reached', turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+    emit({ type: 'error', error: 'Max iterations reached', turnIdx: this.turnIdx, stepIdx: this.stepIdx });
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : String(err);
       turnError = message;
       this.logEvent('error', { content: turnError });
-      yield { type: 'error', error: turnError, turnIdx: this.turnIdx, stepIdx: this.stepIdx };
+      emit({ type: 'error', error: turnError, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
     } finally {
       // ── Hook: afterRun（turn 结束，所有出口都会触发）──
       const actualIter = this.stepIdx;

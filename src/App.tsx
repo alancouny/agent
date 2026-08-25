@@ -1,11 +1,10 @@
-import { useState, lazy, Suspense, useCallback } from 'react';
-import { useLocalStorage } from './hooks/useLocalStorage';
+import { lazy, Suspense, useCallback } from 'react';
 import { Sidebar } from './components/Sidebar';
 import { AgentChat } from './components/AgentChat';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Menu, Sparkles, Loader2 } from 'lucide-react';
-import type { TabType } from './types';
 import { useShortcuts, actionToTab } from './hooks/useShortcuts';
+import { useAppStore } from './store/useAppStore';
 
 // 非首屏面板按需加载（代码分割：chat 首屏常驻，其余进入对应 Tab 时才拉取 chunk）
 const ImageGenerator = lazy(() => import('./components/ImageGenerator').then(m => ({ default: m.ImageGenerator })));
@@ -31,37 +30,28 @@ const MemoryPanel = lazy(() => import('./components/MemoryPanel').then(m => ({ d
 const MetacogPanel = lazy(() => import('./components/MetacogPanel').then(m => ({ default: m.MetacogPanel })));
 const DriftPanel = lazy(() => import('./components/DriftPanel').then(m => ({ default: m.DriftPanel })));
 
-interface ApiSettings {
-  baseUrl: string;
-  apiKey: string;
-  model: string;
-  format: 'openai' | 'anthropic';
-}
-
-const STORAGE_KEY = 'agent_api_settings';
-
 function App() {
-  const [activeTab, setActiveTab] = useState<TabType>('chat');
-  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [apiSettings, setApiSettings] = useLocalStorage<ApiSettings>('agent_api_settings', {
-    baseUrl: 'https://api.openai.com/v1',
-    apiKey: '',
-    model: 'gpt-4o',
-    format: 'openai',
-  });
-  const [sessionId, setSessionId] = useLocalStorage('agent_api_settings_session', '');
+  // ── D3：全局状态统一来自 zustand store（单一数据源 + persist）──
+  const activeTab = useAppStore((s) => s.activeTab);
+  const sidebarCollapsed = useAppStore((s) => s.sidebarCollapsed);
+  const mobileNavOpen = useAppStore((s) => s.mobileNavOpen);
+  const apiSettings = useAppStore((s) => s.apiSettings);
+  const sessionId = useAppStore((s) => s.sessionId);
+  const setSessionId = useAppStore((s) => s.setSessionId);
+  const setActiveTab = useAppStore((s) => s.setActiveTab);
+  const setApiSettings = useAppStore((s) => s.setApiSettings);
+  const toggleSidebar = useAppStore((s) => s.toggleSidebar);
+  const setMobileNavOpen = useAppStore((s) => s.setMobileNavOpen);
 
   const handleSessionChange = (id: string) => {
     setSessionId(id);
-    localStorage.setItem(STORAGE_KEY + '_session', id);
   };
 
   // 全局快捷键：动作 → 切换面板
   const handleShortcut = useCallback((action: string) => {
     const tab = actionToTab(action);
     if (tab) setActiveTab(tab);
-  }, []);
+  }, [setActiveTab]);
   useShortcuts(handleShortcut);
 
   const renderContent = () => {
@@ -145,7 +135,7 @@ function App() {
         activeTab={activeTab}
         onTabChange={setActiveTab}
         collapsed={sidebarCollapsed}
-        onToggleCollapse={() => setSidebarCollapsed(!sidebarCollapsed)}
+        onToggleCollapse={toggleSidebar}
         mobileOpen={mobileNavOpen}
         onMobileClose={() => setMobileNavOpen(false)}
       />

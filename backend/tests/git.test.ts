@@ -4,7 +4,11 @@ import express from 'express';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { gitRouter } from '../src/routes/git.js';
+
+const execFileP = promisify(execFile);
 
 let server: any;
 let base: string;
@@ -24,14 +28,33 @@ test.before(async () => {
 
 test.after(() => server?.close());
 
-test('git: status on a non-repository returns friendly marker (not 4xx)', async () => {
-  // backend/ 不是 git 仓库 → 应返回 notRepository:true 而非报错
+// 环境自适：项目根已被 git init 后，backend/ 内也是 git 仓库。
+// 路由的 notRepository 仅在「分支解析与 status 双双失败」时为真，
+// 因此本测试按实际环境断言，避免在 repo 内运行时误报失败。
+async function isInsideGit(cwd: string): Promise<boolean> {
+  try {
+    const { stdout } = await execFileP('git', ['rev-parse', '--is-inside-work-tree'], { cwd });
+    return stdout.trim() === 'true';
+  } catch {
+    return false;
+  }
+}
+
+test('git: status returns friendly marker for repository state (not 4xx)', async () => {
+  // 无论 backend/ 是否在 git 仓库内，/status 都应返回 200 而非 4xx；
+  // 仓库内 → notRepository:false + 非空 branch；非仓库 → notRepository:true + branch:null。
   const res = await fetch(`${base}/git/status?cwd=${encodeURIComponent(process.cwd())}`);
   assert.equal(res.status, 200);
   const body = await res.json();
-  assert.equal(body.notRepository, true);
-  assert.equal(body.branch, null);
-  assert.equal(body.total, 0);
+  const inside = await isInsideGit(process.cwd());
+  if (inside) {
+    assert.ok(body.notRepository !== true, 'notRepository must be falsy inside a repo');
+    assert.ok(typeof body.branch === 'string' && body.branch.length > 0, 'branch should be set inside a repo');
+  } else {
+    assert.equal(body.notRepository, true);
+    assert.equal(body.branch, null);
+    assert.equal(body.total, 0);
+  }
 });
 
 test('git: status rejects cwd outside project root', async () => {

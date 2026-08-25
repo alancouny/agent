@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 import { FlaskConical, Play, Plus, Trash2, Loader2, ChevronDown, ChevronRight, Zap, Coins, GitCommitHorizontal, ChartNoAxesCombined } from 'lucide-react';
 import { experimentsApi, type ExperimentRunResult } from '../api/client';
+import { useAppStore } from '../store/useAppStore';
 
 interface RunCfg {
   label: string;
@@ -53,20 +54,8 @@ export function ExperimentLab() {
     { label: 'base', model: 'gpt-4o', temperature: '0.7', systemPrompt: '' },
     { label: 'variant', model: 'gpt-4o', temperature: '0.7', systemPrompt: '' },
   ]);
-  const [apiKey, setApiKey] = useState(() => {
-    try {
-      const s = localStorage.getItem('agent_api_settings');
-      if (s) return (JSON.parse(s) as { apiKey?: string }).apiKey ?? '';
-    } catch { /* ignore */ }
-    return '';
-  });
-  const [baseUrl, setBaseUrl] = useState(() => {
-    try {
-      const s = localStorage.getItem('agent_api_settings');
-      if (s) return (JSON.parse(s) as { baseUrl?: string }).baseUrl ?? '';
-    } catch { /* ignore */ }
-    return '';
-  });
+  const [apiKey, setApiKey] = useState(() => useAppStore.getState().apiSettings.apiKey ?? '');
+  const [baseUrl, setBaseUrl] = useState(() => useAppStore.getState().apiSettings.baseUrl ?? '');
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<ExpResult | null>(null);
   const [expanded, setExpanded] = useState<Set<number>>(new Set());

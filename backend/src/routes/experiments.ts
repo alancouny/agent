@@ -14,6 +14,7 @@ import { Router } from 'express';
 import { performance } from 'node:perf_hooks';
 import { v4 as uuidv4 } from 'uuid';
 import { AgentCore } from '../agent/core.js';
+import { AgentEventBus } from '../agent/event-bus.js';
 import { getModelContextWindow } from './model_provider.js';
 
 export const experimentsRouter = Router();
@@ -72,22 +73,24 @@ async function runOnce(r: RunConfig, prompt: string, maxIterations: number): Pro
   const toolUsage: Record<string, number> = {};
 
   const t0 = performance.now();
-  try {
-    for await (const ev of agent.run(prompt)) {
-      if (ev.type === 'text') {
-        output += ev.content;
-        if (ev.usage) {
-          promptTokens += ev.usage.promptTokens ?? 0;
-          completionTokens += ev.usage.completionTokens ?? 0;
-        }
-      } else if (ev.type === 'tool_result') {
-        toolCalls += 1;
-        const name = (ev as any).toolResult?.name ?? 'unknown';
-        toolUsage[name] = (toolUsage[name] ?? 0) + 1;
-      } else if (ev.type === 'error' && error === null) {
-        error = ev.error ?? null;
+  const bus = new AgentEventBus();
+  bus.on('event', (ev) => {
+    if (ev.type === 'text') {
+      output += ev.content;
+      if (ev.usage) {
+        promptTokens += ev.usage.promptTokens ?? 0;
+        completionTokens += ev.usage.completionTokens ?? 0;
       }
+    } else if (ev.type === 'tool_result') {
+      toolCalls += 1;
+      const name = (ev as any).toolResult?.name ?? 'unknown';
+      toolUsage[name] = (toolUsage[name] ?? 0) + 1;
+    } else if (ev.type === 'error' && error === null) {
+      error = ev.error ?? null;
     }
+  });
+  try {
+    await agent.run(prompt, { eventBus: bus });
   } catch (e: any) {
     error = error ?? e?.message ?? String(e);
   }

@@ -82,3 +82,17 @@
 
 交付文档：PRD_MEDIUM_TIER.md / DESIGN_MEDIUM_TIER.md / QA_MEDIUM_TIER_BACKEND.md（含 Round 2/3）。
 已知遗留（低危，记录未处理）：SkillsPanel try/finally 无 catch、SkillsPanel/LLMFlameChart apiFetch 裸 /api 路径、McpPanel 白名单 UI 硬编码中文、审批开关双入口（GeneralSection/ModelManager）、client 拦截器/SSE 无直接单测、SSE 401 无提示。
+
+## 实施进度（2026-08-25 深度档已交付）
+
+| 项 | 状态 | 说明 |
+|---|---|---|
+| D0 清理 6 条 MCP 死配置 | ✅ | 删除全部 6 条 `echo-e2e`（指向不存在的 echo-server.mjs，autostart:false），仅留 `mcp-memory` |
+| D1 routes/agent.ts 拆分 | ✅ | barrel 模式拆 chat/tools/approval/models/sessions/context 六域，路径语义不变；`core-routes.test.ts` 零改动全绿 |
+| D2 AgentCore 事件总线解耦 | ✅ | `AgentEventBus`(EventEmitter) 泛型 `'event'`+按 type 分频道；`run()` 由 AsyncGenerator 改为 `async`+`emit`；chat/experiments/workflow 三处消费者改造；新增 `event-bus.test.ts` |
+| D3 前端状态层 zustand | ✅ | `src/store/useAppStore.ts`（persist+createJSONStorage），localStorage 键 `agent_api_settings` 不变零迁移；App/ModelManager/ExperimentLab/WorkspacePanel 收敛；新增 `useAppStore.test.ts` |
+| D4 API key keychain 化 | ✅ | `KeyStore` 接口：`FileKeyStore`(0600 默认) + `OsKeyStore`(懒加载 `@napi-rs/keyring` 回退)；`ensureApiKey()` 仅首次生成打印明文；新增 `keystore.test.ts` |
+| 测试基线 | ✅ | 后端 203/203、前端 124/124、双端 tsc 0 错误 |
+
+交付文档：DESIGN_DEEP_TIER.md。
+已知遗留：① `@napi-rs/keyring` 未安装，`OsKeyStore` 当前回退 `FileKeyStore`，安装依赖后自动启用系统钥匙串；② 中等档已知遗留（见上）仍低危未处理；③ `git.test.ts` 原误假设 `backend/` 非仓库，已加固为 repo 自适断言（非逻辑回归）。

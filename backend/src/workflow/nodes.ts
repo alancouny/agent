@@ -13,6 +13,7 @@
 // ============================================================
 
 import type { AgentMessage, AgentStreamEvent } from '../agent/types.js';
+import { AgentEventBus } from '../agent/event-bus.js';
 import { delegateTask, scopedReadOnlyTools } from '../agents/delegate.js';
 import { blackboard } from '../shared/blackboard.js';
 import type {
@@ -181,10 +182,12 @@ export async function supervisorNode(input: NodeInput): Promise<NodeResult> {
     // 流式转发：agent 每产出一个过程事件（thinking/tool_call/tool_result/approval/error），
     // 立即 emit 给 graph 运行时 → 调用方（前端打字机效果）。
     // text 事件不转发——最终答案由 complete 节点合并后统一输出，避免重复渲染。
-    for await (const ev of agent.run(state.userMessage)) {
-      if (ev.type === 'text') continue;
+    const bus = new AgentEventBus();
+    bus.on('event', (ev) => {
+      if (ev.type === 'text') return;
       input.emit?.(ev);
-    }
+    });
+    await agent.run(state.userMessage, { eventBus: bus });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
     input.emit?.({ type: 'error', error: msg, turnIdx: 0, stepIdx: state.llmCalls + 1 });
