@@ -1,0 +1,74 @@
+sequenceDiagram
+    autonumber
+    actor User
+    participant FE as 前端 (AgentChat/Settings/McpPanel)
+    participant API as Express /api (requestId 中间件 + auth)
+    participant LOG as utils/logger (ALS requestId)
+    participant ROUTE as 业务路由
+    participant SVC as 服务层 (registry/fts/settings)
+    participant DB as SQLite (app_settings/global_memories/audit_logs/FTS)
+
+    %% ── R3: requestId 链路 ──
+    User->>FE: 操作
+    FE->>API: HTTP 请求 (X-Request-Id 返回)
+    API->>API: requestId 中间件：生成 UUID，runWithRequest，写响应头
+    API->>LOG: 入口日志 (method path status duration, rid)
+    API->>ROUTE: 路由处理（logger 自动带 rid）
+    ROUTE-->>API: 响应 / 错误(safeErrorMessage 脱敏)
+    API-->>FE: 响应 (X-Request-Id)
+    FE->>FE: api/client.ts 读取 X-Request-Id（失败提示附带 requestId）
+
+    %% ── R4: 审批开关读写链 ──
+    FE->>API: GET /api/agent/settings/approval
+    API->>ROUTE: agentRouter.get (L202)
+    ROUTE->>SVC: isApprovalRequired()
+    SVC->>SVC: 内存值（启动时自 settingsStore 加载）
+    SVC-->>ROUTE: {approvalRequired}
+    ROUTE-->>FE: 200 {approvalRequired}
+
+    FE->>API: POST /api/agent/settings/approval {enabled:false, confirm:true}
+    API->>API: auth 中间件（无鉴权 → 401，审计 rejected）
+    API->>ROUTE: agentRouter.post (L206)
+    ROUTE->>ROUTE: enabled===false && confirm!==true → 400
+    ROUTE->>SVC: setApprovalRequired(false)
+    SVC->>DB: settingsStore.set('approval.required', false)
+    SVC->>DB: logApprovalToggle → audit_logs(approval_toggle)
+    ROUTE-->>FE: 200 {approvalRequired:false}
+
+    %% ── R2: 记忆检索链 ──
+    FE->>API: POST /api/agent/chat (memoryInject=1)
+    API->>ROUTE: agentRouter.post /chat
+    ROUTE->>SVC: AgentCore.loadGlobalMemories (core.ts L164)
+    SVC->>SVC: searchAllMemories(query, topK*2)
+    SVC->>SVC: localMemoryProvider.search
+    SVC->>SVC: TTL 缓存命中？是→返回
+    SVC->>DB: fts.searchCandidateIds：unicode61 MATCH / trigram MATCH / LIKE 兜底 (LIMIT 100)
+    DB-->>SVC: 候选 id 集合
+    SVC->>DB: SELECT * FROM global_memories WHERE id IN (...)
+    SVC->>SVC: tokenize + score 精排 → topK → 写缓存(60s)
+    SVC-->>ROUTE: 记忆注入文本
+    ROUTE-->>FE: SSE 流
+
+    %% ── R5: MCP 连接注册链 ──
+    FE->>API: POST /api/mcp/:id/connect
+    API->>ROUTE: mcpRouter.post /:id/connect
+    ROUTE->>SVC: mcpManager.connect(id)
+    SVC->>SVC: client.listTools() → toolList
+    SVC->>SVC: allowedSet = allowedTools ?? []（fail-closed）
+    loop 每个工具
+        SVC->>SVC: allowedSet 为空/不在白名单 → 跳过注册
+        SVC->>SVC: dangerous = isDangerousToolName(name)
+        SVC->>SVC: toolRegistry.register(requiresApproval:true, dangerous)
+    end
+    SVC-->>ROUTE: McpConnectionStatus(tools 已过滤)
+    ROUTE-->>FE: {status}
+
+    %% ── R5: 执行时两层审批门 ──
+    FE->>API: POST /api/agent/tools/execute {toolName: mcp__S__write_file}
+    API->>ROUTE: agentRouter.post /tools/execute
+    ROUTE->>SVC: executeTool(name, args, ctx)
+    SVC->>SVC: mustApprove = approvalRequired || tool.dangerous===true
+    SVC->>SVC: requiresApproval && mustApprove → PENDING_APPROVAL（危险工具不可豁免）
+    SVC->>DB: logAudit
+    SVC-->>ROUTE: ToolResult
+    ROUTE-->>FE: 结果

@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>竞品差距分析 · 你的 Agent 应用 vs OpenClaw / CherryStudio</title>
+<style>
+  :root {
+    --bg: #f7f8fa;
+    --card: #ffffff;
+    --border: #e3e6ea;
+    --text: #1f2329;
+    --muted: #6b7280;
+    --accent: #2563eb;
+    --green: #16a34a;
+    --amber: #d97706;
+    --red: #dc2626;
+    --chip: #eef2ff;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+    line-height: 1.65; }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 32px 24px 64px; }
+  h1 { font-size: 26px; margin: 0 0 4px; }
+  .sub { color: var(--muted); font-size: 14px; margin-bottom: 24px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 20px 22px; margin-bottom: 18px; }
+  h2 { font-size: 19px; margin: 0 0 12px; display: flex; align-items: center; gap: 8px; }
+  h2 .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); display: inline-block; }
+  h3 { font-size: 15px; margin: 18px 0 8px; color: var(--text); }
+  table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+  th, td { text-align: left; padding: 9px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  th { background: #f1f3f5; font-weight: 600; color: var(--muted); }
+  td.you { background: #f0fdf4; font-weight: 600; color: var(--green); }
+  td.miss { color: var(--red); font-weight: 600; }
+  td.part { color: var(--amber); }
+  .tag { display: inline-block; font-size: 11px; padding: 2px 8px; border-radius: 999px;
+    background: var(--chip); color: var(--accent); margin-right: 6px; }
+  .p0 { background: #fef2f2; color: var(--red); }
+  .p1 { background: #fffbeb; color: var(--amber); }
+  .p2 { background: #eff6ff; color: var(--accent); }
+  ul { margin: 8px 0 0; padding-left: 20px; }
+  li { margin: 6px 0; }
+  .strength { border-left: 3px solid var(--green); padding-left: 12px; margin: 10px 0; }
+  .gap { border-left: 3px solid var(--red); padding-left: 12px; margin: 10px 0; }
+  code { background: #f1f3f5; padding: 1px 6px; border-radius: 5px; font-size: 12.5px; }
+  .foot { color: var(--muted); font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>竞品差距分析</h1>
+  <div class="sub">你的 Agent 应用 vs <b>OpenClaw Desktop</b> / <b>CherryStudio</b> · 基于 2026-08-13 代码现状 + 竞品公开资料</div>
+
+  <div class="card">
+    <h2><span class="dot"></span>你现在的真实状态（读代码核实）</h2>
+    <ul>
+      <li><b>架构</b>：React 19 + Vite + Tailwind 前端；Express + TS + better-sqlite3 后端；AgentCore 是真正的 ReAct 循环（OpenAI + Anthropic）。</li>
+      <li><b>已落地能力</b>：工具注册表 + 审批门、Tasks（agent 工具）、MCP 客户端（stdio/sse/http + 自动重连）、Skills（关键词注入）、Memory（会话语义记忆）、Computer-use、Workspace 文件系统、Terminal、<b>Hook 系统</b>（beforeRun / beforeModelCall / beforeToolCall，支持 continue / abort / modify）。</li>
+      <li><b>验证</b>：<code>npm test</code> 36/36 绿；后端 tsc 与前端 tsc 均通过。</li>
+      <li><b>附带能力</b>：图像生成（stability.ai）、macOS OCR（已确认存在）。</li>
+      <li><b>确认缺失</b>：无 RAG/知识库、无 Mermaid/Artifact 渲染、无语音（TTS/STT）、无消息渠道集成（已 grep 确认）。</li>
+    </ul>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot"></span>能力对照表</h2>
+    <table>
+      <thead><tr><th>能力</th><th>你 (self_write)</th><th>OpenClaw Desktop</th><th>CherryStudio</th></tr></thead>
+      <tbody>
+        <tr><td>ReAct Agent 循环</td><td class="you">✓ 真后端</td><td>✓</td><td>✓ Agent 模式</td></tr>
+        <tr><td>工具注册表 + 审批</td><td class="you">✓ 一等公民</td><td>~ 命令级授权</td><td>~ MCP 工具</td></tr>
+        <tr><td>MCP 客户端</td><td class="you">✓ stdio/sse/http+重连</td><td>✓</td><td>✓ 数百种</td></tr>
+        <tr><td>Hook / 拦截 API</td><td class="you">✓ 3 阶段 abort/modify</td><td>✗ 仅插件</td><td>✗</td></tr>
+        <tr><td>终端 / 文件系统 agent 可调</td><td class="you">✓ run_command/list_files</td><td>✓ 浏览器自动化</td><td>✓ Shell MCP</td></tr>
+        <tr><td>知识库 / RAG</td><td class="miss">✗ 无</td><td>~ 部分</td><td class="you">✓ 招牌功能</td></tr>
+        <tr><td>多模型广度</td><td class="part">~ OpenAI兼容+Anthropic</td><td>✓ 300+ 模型</td><td>✓ 300+ 模型 50+ 厂商</td></tr>
+        <tr><td>智能故障转移 / 模型对比</td><td class="miss">✗ 无</td><td>✓</td><td>✓ 并排对比</td></tr>
+        <tr><td>对话分支 / 全文检索 / token 计数</td><td class="miss">✗ 仅持久化</td><td>✓ 分支+检索</td><td>✓ 主题管理</td></tr>
+        <tr><td>打包分发（安装包）</td><td class="miss">✗ dev-server</td><td>✓ 一键安装</td><td>✓ 三端桌面</td></tr>
+        <tr><td>提示词管理（变量/版本/共享）</td><td class="miss">✗ 无</td><td>~</td><td>✓</td></tr>
+        <tr><td>语音 TTS / STT</td><td class="miss">✗ 无</td><td>✓（AEGIS）</td><td>✓</td></tr>
+        <tr><td>图像生成 / OCR</td><td class="part">~ 图像+macOS OCR</td><td>✓ 图片分析</td><td>✓ 文生图+OCR</td></tr>
+        <tr><td>消息渠道（微信/飞书/Telegram…）</td><td class="miss">✗ 无</td><td>✓ 12+ 渠道</td><td>✗</td></tr>
+        <tr><td>全局快捷键 / 系统托盘 / 浏览器扩展</td><td class="miss">✗ 无</td><td>✓</td><td>~ 部分</td></tr>
+        <tr><td>技能市场 / 社区</td><td class="miss">✗ 手动种子</td><td>✓ ClawHub 3k+</td><td>✓ 300+ 助手</td></tr>
+        <tr><td>可观测性（成本/token/日志/定时看板）</td><td class="miss">✗ 无</td><td>✓ AEGIS 看板</td><td>~</td></tr>
+        <tr><td>定时任务 / Cron</td><td class="miss">✗ 无</td><td>✓</td><td>✗</td></tr>
+        <tr><td>数据本地化 / 隐私</td><td class="you">✓ 自托管无遥测</td><td>✓ 本地加密+钥匙串</td><td>✓ 本地+WebDAV</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot" style="background:var(--green)"></span>你的差异化优势（竞品没有，应放大）</h2>
+    <div class="strength">
+      <b>1. 一等公民 Hook 系统</b> — <code>beforeRun / beforeModelCall / beforeToolCall</code> 可 <code>abort</code> 短路、<code>modify</code> 改写上下文，支持多 hook 串联。OpenClaw 只有"插件"，CherryStudio 没有。这是工程级的可编程拦截能力，适合做"企业级安全闸门"（如拦截 <code>rm -rf</code>）。
+    </div>
+    <div class="strength">
+      <b>2. MCP 工具直接并入 agent 同一注册表</b> — agent 真能调用 MCP 工具，且带审批 + 自动重连。CherryStudio 的 MCP 偏"配置展示"，你的更"活"。
+    </div>
+    <div class="strength">
+      <b>3. Terminal / Workspace 是 agent 可调用的真实工具</b> — <code>run_command</code> + <code>list_files</code> 与 <code>read_file/write_file</code> 构成"文件系统+终端闭环"，本地自主执行比 OpenClaw 的"浏览器自动化"更可控。
+    </div>
+    <div class="strength">
+      <b>4. 自托管、零遥测、全控制</b> — 数据都在你机器上的 SQLite，无第三方服务器。
+    </div>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot" style="background:var(--red)"></span>差距清单（按优先级）</h2>
+
+    <h3><span class="tag p0">P0</span>功能差距（用户最期待）</h3>
+    <div class="gap"><b>1. 知识库 / RAG</b> — CherryStudio 的招牌功能。你完全没有文档摄取 / 切分 / 向量检索。建议接本地向量（<code>sqlite-vec</code> 或 chromadb），把已有 <code>memories</code> 表升格为"可检索知识库"，复用 <code>loadMemories()</code> 注入点。</div>
+    <div class="gap"><b>2. 多模型广度 + 故障转移 + 并排对比</b> — 架构已支持 OpenAI 兼容，加 failover（主模型超时自动切备用）和"同消息多模型对比"改动小，但体验提升大。</div>
+    <div class="gap"><b>3. 对话分支 / 全文检索 / token 计数</b> — 你现在只有会话持久化 + 恢复。加分支（在任意消息 fork）和 token 显示是 CherryStudio/OpenClaw 的基础体验。</div>
+
+    <h3><span class="tag p1">P1</span>产品化差距</h3>
+    <div class="gap"><b>4. 打包分发</b> — 你现在是 <code>vite + tsx</code> dev-server。没有安装包，"桌面 agent"只是开发者玩具。用 Tauri（轻量）或 Electron 封装，否则无法分发。</div>
+    <div class="gap"><b>5. 提示词管理</b> — 变量 / 版本 / 团队共享。你目前 system prompt 硬编码 + skills 种子。</div>
+    <div class="gap"><b>6. 语音 TTS / STT</b> — CherryStudio 有。你已有图像生成 + OCR，语音是自然的下一步。</div>
+
+    <h3><span class="tag p2">P2</span>集成 / 体验</h3>
+    <div class="gap"><b>7. 消息渠道</b>（微信/飞书/Telegram…）— OpenClaw 杀手锏，你没有。</div>
+    <div class="gap"><b>8. 全局快捷键 / 系统托盘 / 浏览器扩展</b> — OpenClaw 深度 OS 集成，你没有。</div>
+    <div class="gap"><b>9. 技能市场 / 社区</b> — OpenClaw ClawHub 3,286+。你只有手动种子 skills，无导入/导出/市场。</div>
+    <div class="gap"><b>10. 可观测性看板</b>（成本/token/日志/定时任务）— OpenClaw AEGIS 有。你零可观测。</div>
+    <div class="gap"><b>11. Mermaid / Artifact 渲染</b> — 聊天里没有图表 / 交互式 HTML 沙盒。</div>
+    <div class="gap"><b>12. 定时任务 / Cron</b> — 无 agent 级调度（系统层的 automation 框架是另一回事）。</div>
+  </div>
+
+  <div class="card">
+    <h2><span class="dot"></span>建议对标路线</h2>
+    <ul>
+      <li><b>最短路径补齐 RAG</b>：接 <code>sqlite-vec</code>，加 <code>/api/knowledge</code>（import PDF/MD → 切分 → 嵌入 → 检索），把 <code>loadMemories()</code> 扩成 <code>loadContext()</code>。这是和 CherryStudio 对齐的最大单点。</li>
+      <li><b>把 Hook 做成卖点</b>：可视化 Hook 编辑器（你已有结构化 config），竞品没有——这是差异化的护城河，不是追平项。</li>
+      <li><b>加 failover + 模型对比</b>：架构友好，改动小，体验提升大。</li>
+      <li><b>Tauri 打包</b>：否则永远只是 demo。</li>
+      <li><b>优先级建议</b>：P0-1（RAG）→ P0-2（failover/对比）→ P1-4（打包）→ 同时持续放大 Hook 卖点。</li>
+    </ul>
+    <div class="foot">注：竞品功能基于公开官网/资料整理（2026-08-13），具体版本功能以实际产品为准。你项目的"✓/✗/~" 均来自本次代码核查（grep + 读源码）。</div>
+  </div>
+</div>
+</body>
+</html>

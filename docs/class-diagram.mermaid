@@ -1,0 +1,108 @@
+classDiagram
+    direction LR
+
+    class MemoryProvider {
+        <<interface>>
+        +id: string
+        +kind: 'local' | 'mcp'
+        +label: string
+        +isAvailable() Promise~boolean~
+        +list(limit?) Promise~MemoryEntry[]~
+        +get(id) Promise~MemoryEntry|null~
+        +add(entry) Promise~MemoryEntry~
+        +update(id, patch) Promise~MemoryEntry|null~
+        +remove(id) Promise~boolean~
+        +search(query, topK) Promise~MemoryEntry[]~
+    }
+
+    class localMemoryProvider {
+        +add() 触发 FTS 触发器 + invalidateMemoryCache
+        +update() 触发 FTS 触发器 + invalidateMemoryCache
+        +remove() 触发 FTS 触发器 + invalidateMemoryCache
+        +search() TTL 缓存 → fts.searchCandidateIds → 精排
+    }
+
+    class MemoryFts {
+        +searchCandidateIds(query, limit) string[]
+        +invalidateMemoryCache() void
+        +rebuildFtsIndex() void
+        +getCachedSearch(query) RankedMemory[]|null
+        +putCachedSearch(query, results) void
+    }
+
+    class searchAllMemories {
+        +providers 多源并发检索合并
+    }
+
+    class MemoryEntry {
+        +id: string
+        +content: string
+        +tags?: string[]
+        +source: string
+        +createdAt: string
+        +updatedAt: string
+        +score?: number
+    }
+
+    MemoryProvider <|.. localMemoryProvider
+    localMemoryProvider --> MemoryFts
+    searchAllMemories --> MemoryProvider
+
+    class SettingsStore {
+        +get~T~(key, fallback) T
+        +set(key, value) void
+    }
+
+    class ToolRegistry {
+        +register(name, def) void
+        +unregister(name) boolean
+        +get(name) ToolDefinition|undefined
+        +getSchemas() ToolSchema[]
+        +executeTool(name, args, ctx) Promise~ToolResult~
+        +isApprovalRequired() boolean
+        +setApprovalRequired(value) void
+        +logApprovalToggle(prev, next, actor, result, note) void
+    }
+
+    class ToolDefinition {
+        +schema: ToolSchema
+        +handler: ToolHandler
+        +category: string
+        +requiresApproval: boolean
+        +enabled: boolean
+        +readOnly?: boolean
+        +dangerous?: boolean
+    }
+
+    class DangerousTools {
+        +isDangerousToolName(name) boolean
+        +classifyDanger(name) 'file_write'|'shell_exec'|null
+    }
+
+    class McpManager {
+        +connect(id) Promise~McpConnectionStatus~
+        +disconnect(id) Promise
+        +reconnect(id) Promise~boolean~
+        +statusOf(id, connected, toolNames, error) McpConnectionStatus
+        +autostart() Promise
+    }
+
+    class McpServerConfig {
+        +id: string
+        +name: string
+        +transport: 'stdio'|'sse'|'http'
+        +command?: string
+        +args?: string
+        +url?: string
+        +env?: Record~string,string~
+        +autostart?: boolean
+        +enabled?: boolean
+        +allowedTools?: string[]
+        +createdAt: string
+    }
+
+    ToolRegistry --> SettingsStore
+    ToolRegistry --> DangerousTools
+    McpManager --> ToolRegistry : register(白名单过滤)
+    McpManager --> McpServerConfig : allowedTools
+    McpManager --> DangerousTools : isDangerousToolName

@@ -1,0 +1,259 @@
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #6366f1;
+  --color-primary-dark: #4f46e5;
+  --color-primary-light: #818cf8;
+  --color-secondary: #f472b6;
+  --color-accent: #06b6d4;
+  --color-bg-dark: #0f172a;
+  --color-bg-darker: #020617;
+  --color-bg-card: #1e293b;
+  --color-bg-hover: #334155;
+  --color-bg-input: #1e293b;
+  --color-bg-hint: #1e293b;
+  --color-bg-elevated: #334155;
+  --color-text-primary: #f8fafc;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted: #64748b;
+  --color-border: #334155;
+  --color-border-dark: #1e293b;
+  --color-border-light: #475569;
+  --color-border-hover: #475569;
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-error: #ef4444;
+}
+
+/* ── 浅色主题：data-theme='light' 时覆盖默认（深色）变量 ──────
+   Tailwind 工具类引用 var(--color-*)（见 @theme），所以这一层
+   覆盖即完成整站换肤；data-theme='dark' 使用上方默认值。 */
+:root[data-theme='light'] {
+  --color-bg-dark: #f1f5f9;
+  --color-bg-darker: #e2e8f0;
+  --color-bg-card: #ffffff;
+  --color-bg-hover: #e2e8f0;
+  --color-bg-input: #f8fafc;
+  --color-bg-hint: #f1f5f9;
+  --color-bg-elevated: #ffffff;
+  --color-text-primary: #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted: #94a3b8;
+  --color-border: #cbd5e1;
+  --color-border-dark: #94a3b8;
+  --color-border-light: #e2e8f0;
+  --color-border-hover: #94a3b8;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  background-color: var(--color-bg-dark);
+  color: var(--color-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen',
+    'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-bg-darker);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-bg-hover);
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes typing {
+  from { width: 0; }
+  to { width: 100%; }
+}
+
+@keyframes blink {
+  0%, 50% { border-color: transparent; }
+  51%, 100% { border-color: var(--color-text-secondary); }
+}
+
+/* ════════════════════════════════════════════════════════════
+   极客主题：深色底 + 霓虹/终端色系
+   data-theme 值由 src/theme.ts 的 GEEK_THEMES 驱动
+   ════════════════════════════════════════════════════════════ */
+
+/* Matrix —— 黑底绿字，终端雨夜 */
+:root[data-theme='matrix'] {
+  --color-primary: #00ff41;
+  --color-primary-dark: #00cc34;
+  --color-primary-light: #66ff99;
+  --color-secondary: #00ffcc;
+  --color-accent: #00ff41;
+  --color-bg-dark: #0a0f0a;
+  --color-bg-darker: #040805;
+  --color-bg-card: #0d140d;
+  --color-bg-hover: #14331a;
+  --color-bg-input: #0d140d;
+  --color-bg-hint: #0d140d;
+  --color-bg-elevated: #12241a;
+  --color-text-primary: #aaffcc;
+  --color-text-secondary: #55ff88;
+  --color-text-muted: #2f8f4e;
+  --color-border: #1d5c33;
+  --color-border-dark: #0d3b1f;
+  --color-border-light: #2f8f4e;
+  --color-border-hover: #3fe66b;
+  --color-success: #00ff41;
+  --color-warning: #ffd60a;
+  --color-error: #ff2e2e;
+}
+
+/* Cyberpunk —— 霓虹粉 × 电光青 */
+:root[data-theme='cyberpunk'] {
+  --color-primary: #ff2a6d;
+  --color-primary-dark: #d61f5c;
+  --color-primary-light: #ff5c8f;
+  --color-secondary: #05d9e8;
+  --color-accent: #ffa400;
+  --color-bg-dark: #0d0221;
+  --color-bg-darker: #06011a;
+  --color-bg-card: #1a0b2e;
+  --color-bg-hover: #2b1a4a;
+  --color-bg-input: #1a0b2e;
+  --color-bg-hint: #1a0b2e;
+  --color-bg-elevated: #2b1a4a;
+  --color-text-primary: #d1f7ff;
+  --color-text-secondary: #a5c8e0;
+  --color-text-muted: #5d4a8f;
+  --color-border: #3d2a6e;
+  --color-border-dark: #241545;
+  --color-border-light: #6a4fb8;
+  --color-border-hover: #05d9e8;
+  --color-success: #05d9e8;
+  --color-warning: #ffa400;
+  --color-error: #ff2a6d;
+}
+
+/* Dracula —— 经典暗紫 */
+:root[data-theme='dracula'] {
+  --color-primary: #bd93f9;
+  --color-primary-dark: #9a6ff0;
+  --color-primary-light: #d6bcfa;
+  --color-secondary: #ff79c6;
+  --color-accent: #8be9fd;
+  --color-bg-dark: #282a36;
+  --color-bg-darker: #1e1f29;
+  --color-bg-card: #313440;
+  --color-bg-hover: #44475a;
+  --color-bg-input: #313440;
+  --color-bg-hint: #313440;
+  --color-bg-elevated: #44475a;
+  --color-text-primary: #f8f8f2;
+  --color-text-secondary: #bd93f9;
+  --color-text-muted: #6272a4;
+  --color-border: #44475a;
+  --color-border-dark: #313440;
+  --color-border-light: #6272a4;
+  --color-border-hover: #bd93f9;
+  --color-success: #50fa7b;
+  --color-warning: #f1fa8c;
+  --color-error: #ff5555;
+}
+
+/* Monokai —— 高对比黄粉 */
+:root[data-theme='monokai'] {
+  --color-primary: #a6e22e;
+  --color-primary-dark: #86c126;
+  --color-primary-light: #c6f06b;
+  --color-secondary: #f92672;
+  --color-accent: #66d9ef;
+  --color-bg-dark: #272822;
+  --color-bg-darker: #1d1e19;
+  --color-bg-card: #33342c;
+  --color-bg-hover: #4a4b3f;
+  --color-bg-input: #33342c;
+  --color-bg-hint: #33342c;
+  --color-bg-elevated: #4a4b3f;
+  --color-text-primary: #f8f8f2;
+  --color-text-secondary: #a6e22e;
+  --color-text-muted: #75715e;
+  --color-border: #4a4b3f;
+  --color-border-dark: #33342c;
+  --color-border-light: #75715e;
+  --color-border-hover: #66d9ef;
+  --color-success: #a6e22e;
+  --color-warning: #e6db74;
+  --color-error: #f92672;
+}
+
+/* Solarized Dark —— 低饱和暖调 */
+:root[data-theme='solarized'] {
+  --color-primary: #268bd2;
+  --color-primary-dark: #1e75ad;
+  --color-primary-light: #6cb2e3;
+  --color-secondary: #d33682;
+  --color-accent: #2aa198;
+  --color-bg-dark: #002b36;
+  --color-bg-darker: #001f27;
+  --color-bg-card: #073642;
+  --color-bg-hover: #0d4b5c;
+  --color-bg-input: #073642;
+  --color-bg-hint: #073642;
+  --color-bg-elevated: #0d4b5c;
+  --color-text-primary: #93a1a1;
+  --color-text-secondary: #b58900;
+  --color-text-muted: #586e75;
+  --color-border: #0d4b5c;
+  --color-border-dark: #073642;
+  --color-border-light: #586e75;
+  --color-border-hover: #2aa198;
+  --color-success: #859900;
+  --color-warning: #cb4b16;
+  --color-error: #dc322f;
+}
+
+/* ════════════════════════════════════════════════════════════
+   Markdown 渲染样式（MarkdownEditor 预览区）
+   ════════════════════════════════════════════════════════════ */
+.geek-md { color: var(--color-text-primary); font-size: 14px; line-height: 1.75; }
+.geek-md h1, .geek-md h2, .geek-md h3 { color: var(--color-primary); font-weight: 700; line-height: 1.3; }
+.geek-md h1 { font-size: 1.6em; margin: 1em 0 .5em; border-bottom: 1px solid var(--color-border); padding-bottom: .3em; }
+.geek-md h2 { font-size: 1.3em; margin: 1.2em 0 .5em; }
+.geek-md h3 { font-size: 1.1em; margin: 1em 0 .4em; }
+.geek-md p { margin: .6em 0; }
+.geek-md a { color: var(--color-accent); text-decoration: underline; text-underline-offset: 2px; }
+.geek-md blockquote { border-left: 3px solid var(--color-primary); margin: .8em 0; padding: .2em 1em; color: var(--color-text-secondary); background: var(--color-bg-card); border-radius: 0 8px 8px 0; }
+.geek-md code { background: var(--color-bg-elevated); color: var(--color-secondary); padding: .15em .4em; border-radius: 4px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .88em; }
+.geek-md pre { background: var(--color-bg-darker); padding: .9rem 1rem; border-radius: 8px; overflow-x: auto; border: 1px solid var(--color-border); }
+.geek-md pre code { background: none; padding: 0; color: var(--color-text-primary); }
+.geek-md table { border-collapse: collapse; margin: .8em 0; width: 100%; }
+.geek-md th, .geek-md td { border: 1px solid var(--color-border); padding: .35em .7em; text-align: left; }
+.geek-md th { background: var(--color-bg-card); color: var(--color-primary); }
+.geek-md tr:nth-child(even) td { background: var(--color-bg-card); }
+.geek-md hr { border: none; border-top: 1px solid var(--color-border); margin: 1.4em 0; }
+.geek-md ul, .geek-md ol { padding-left: 1.4em; margin: .5em 0; }
+.geek-md li { margin: .25em 0; }
+.geek-md input[type='checkbox'] { accent-color: var(--color-primary); margin-right: .4em; }
+.geek-md img { max-width: 100%; border-radius: 8px; }
