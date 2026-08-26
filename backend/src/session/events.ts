@@ -93,6 +93,8 @@ export type SessionEventRow = {
 
 class SessionEventStore {
   private appendCount = 0;
+  /** 串行化写操作：避免并发 append 在 SELECT MAX(seq)+INSERT 之间产生重复 seq。 */
+  private pendingWrite: Promise<SessionEvent> | null = null;
 
   /** 定期清理过期事件（默认保留 30 天），防止长期会话磁盘无限膨胀。 */
   purgeExpired(days = 30): void {
@@ -109,48 +111,62 @@ class SessionEventStore {
   async append(input: EventInput): Promise<SessionEvent> {
     // 每 300 次写入清理一次过期事件（廉价、分摊到写路径）
     if (++this.appendCount % 300 === 0) this.purgeExpired();
-    const db = getDb();
-    const row = db
-      .prepare(`SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM session_events WHERE session_id = ?`)
-      .get(input.sessionId) as { next: number };
-    const seq = row.next;
-    const id = uuidv4();
-    await withDbRetry(() =>
-      db.prepare(
-        `INSERT INTO session_events (id, session_id, seq, turn_idx, step_idx, type, role, content, tool_name, args, result, model, tokens)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(
-        id,
-        input.sessionId,
-        seq,
-        input.turnIdx ?? 0,
-        input.stepIdx ?? 0,
-        input.type,
-        input.role ?? null,
-        input.content ?? null,
-        input.toolName ?? null,
-        input.args !== undefined ? JSON.stringify(input.args) : null,
-        input.result !== undefined ? JSON.stringify(input.result) : null,
-        input.model ?? null,
-        input.tokens !== undefined ? JSON.stringify(input.tokens) : null
-      )
+    // 屏障：等待上一次写入「落定」（无论成功或失败），并吞掉其错误——
+    // 保证本次写入一定执行，前次失败不会级联阻断后续写入。
+    const barrier: Promise<void> = (this.pendingWrite ?? Promise.resolve()).then(
+      () => undefined,
+      () => undefined,
     );
-    return {
-      id,
-      sessionId: input.sessionId,
-      seq,
-      turnIdx: input.turnIdx ?? 0,
-      stepIdx: input.stepIdx ?? 0,
-      type: input.type,
-      role: input.role,
-      content: input.content,
-      toolName: input.toolName,
-      args: input.args !== undefined ? JSON.stringify(input.args) : undefined,
-      result: input.result !== undefined ? JSON.stringify(input.result) : undefined,
-      model: input.model,
-      tokens: input.tokens !== undefined ? JSON.stringify(input.tokens) : undefined,
-      createdAt: new Date().toISOString(),
-    };
+    const next: Promise<SessionEvent> = (async (): Promise<SessionEvent> => {
+      await barrier;
+      const db = getDb();
+      const row = db
+        .prepare(`SELECT COALESCE(MAX(seq), 0) + 1 AS next FROM session_events WHERE session_id = ?`)
+        .get(input.sessionId) as { next: number };
+      const seq = row.next;
+      const id = uuidv4();
+      await withDbRetry(() =>
+        db.prepare(
+          `INSERT INTO session_events (id, session_id, seq, turn_idx, step_idx, type, role, content, tool_name, args, result, model, tokens)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        ).run(
+          id,
+          input.sessionId,
+          seq,
+          input.turnIdx ?? 0,
+          input.stepIdx ?? 0,
+          input.type,
+          input.role ?? null,
+          input.content ?? null,
+          input.toolName ?? null,
+          input.args !== undefined ? JSON.stringify(input.args) : null,
+          input.result !== undefined ? JSON.stringify(input.result) : null,
+          input.model ?? null,
+          input.tokens !== undefined ? JSON.stringify(input.tokens) : null
+        )
+      );
+      const result: SessionEvent = {
+        id,
+        sessionId: input.sessionId,
+        seq,
+        turnIdx: input.turnIdx ?? 0,
+        stepIdx: input.stepIdx ?? 0,
+        type: input.type,
+        role: input.role,
+        content: input.content,
+        toolName: input.toolName,
+        args: input.args !== undefined ? JSON.stringify(input.args) : undefined,
+        result: input.result !== undefined ? JSON.stringify(input.result) : undefined,
+        model: input.model,
+        tokens: input.tokens !== undefined ? JSON.stringify(input.tokens) : undefined,
+        createdAt: new Date().toISOString(),
+      };
+      return result;
+    })();
+    // 关键：把 next 挂回队列，后续 append 的屏障才会等待本次写入落定，
+    // 否则所有并发调用共享同一旧屏障、同时放行，串行化失效（seq 会重复）。
+    this.pendingWrite = next;
+    return next;
   }
 
   /** All events for a session, oldest first. */

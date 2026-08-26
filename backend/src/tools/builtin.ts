@@ -12,15 +12,15 @@ function safeEvalExpr(expr: string): number {
   const cleaned = expr.replace(/[^0-9+\-*/%.()\s]/g, '').replace(/\s+/g, ' ').trim();
   if (!cleaned) throw new Error('Empty expression');
 
-  // Tokenize into numbers and operators
+  // Tokenize into numbers and operators ('**' must match before '*')
   const tokens: (string | number)[] = [];
-  const re = /(\d+\.?\d*|[+\-*/%()])/g;
+  const re = /(\d+\.?\d*|\*\*|[+\-*/%()])/g;
   let m: RegExpExecArray | null;
   while ((m = re.exec(cleaned)) !== null) tokens.push(m[1]);
 
   if (tokens.length === 0) throw new Error('Invalid expression');
 
-  // Recursive-descent parser: expr → term → factor
+  // Recursive-descent parser: expr → term → factor(power)
   let pos = 0;
   function peek(): string | number | undefined { return tokens[pos]; }
   function consume(): string | number { return tokens[pos++]; }
@@ -35,10 +35,10 @@ function safeEvalExpr(expr: string): number {
     return left;
   }
   function parseTerm(): number {
-    let left = parseFactor();
+    let left = parsePower();
     while (peek() === '*' || peek() === '/' || peek() === '%') {
       const op = consume();
-      const right = parseFactor();
+      const right = parsePower();
       if (op === '*') left = left * right;
       else if (op === '/') {
         if (right === 0) throw new Error('Division by zero');
@@ -46,6 +46,15 @@ function safeEvalExpr(expr: string): number {
       } else left = left % right;
     }
     return left;
+  }
+  /** 幂运算：右结合（2**3**2 = 2**(3**2)），优先级高于乘除。 */
+  function parsePower(): number {
+    const base = parseFactor();
+    if (peek() === '**') {
+      consume();
+      return Math.pow(base, parsePower());
+    }
+    return base;
   }
   function parseFactor(): number {
     if (peek() === '-') { consume(); return -parseFactor(); }
@@ -179,7 +188,8 @@ toolRegistry.register('write_file', {
     try {
       const root = resolveWorkspaceRoot();
       await writeFileContent(root, filePath, content, 'utf-8');
-      return { success: true, output: `File written: ${filePath} (${content.length} bytes)` };
+      const bytes = Buffer.byteLength(String(content), 'utf-8');
+      return { success: true, output: `File written: ${filePath} (${bytes} bytes)` };
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : 'Write failed';
       return { success: false, output: `Write failed: ${msg}`, error: msg };
@@ -289,8 +299,12 @@ toolRegistry.register('weather', {
           data: { city: name, temperature: w.temperature, weatherCode: w.weathercode, windSpeed: w.windspeed }
         };
       }
-    } catch { /* use mock data on failure */ }
-    return { success: true, output: `Weather data for ${city}: 22°C, Partly Cloudy (mock)`, data: { city, temperature: 22 } };
+      // 地理编码无结果：城市名无法识别（区别于服务不可用）
+      return { success: false, output: `City not found: ${city}`, error: 'CITY_NOT_FOUND' };
+    } catch {
+      // 网络错误 / 超时：如实上报失败，不返回模拟数据
+      return { success: false, output: `Weather lookup failed for ${city}: service unavailable`, error: 'WEATHER_API_UNAVAILABLE' };
+    }
   },
   category: 'search',
   requiresApproval: false,

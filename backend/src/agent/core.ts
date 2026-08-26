@@ -415,16 +415,18 @@ export class AgentCore {
         step: this.stepIdx,
       });
 
-      const response = await this.callLLM();
-      if (!response) {
+      const llmResult = await this.callLLM();
+      if (!llmResult.response) {
         if (this.currentLlmCallId) {
           llmTracer.end(this.currentLlmCallId, { failed: true, contentPreview: 'callLLM returned null' });
           this.currentLlmCallId = null;
         }
-        this.logEvent('error', { content: 'Failed to get response from LLM' });
-        emit({ type: 'error', error: 'Failed to get response from LLM (callLLM returned null)', turnIdx: this.turnIdx, stepIdx: this.stepIdx });
+        const errMsg = llmResult.lastError || 'All provider calls exhausted';
+        this.logEvent('error', { content: `LLM call failed: ${errMsg}` });
+        emit({ type: 'error', error: `Failed to get response from LLM: ${errMsg}`, turnIdx: this.turnIdx, stepIdx: this.stepIdx });
         return;
       }
+      const response = llmResult.response;
 
       const { content, toolCalls } = this.normalizeResponse(response);
       // 元认知：从首次响应提取预算预测
@@ -807,7 +809,7 @@ export class AgentCore {
     return { content: '', toolCalls: [] };
   }
 
-  private async callLLM(): Promise<unknown> {
+  private async callLLM(): Promise<{ response: unknown; lastError?: string }> {
     const primary = {
       provider: this.config.provider,
       model: this.config.model,
@@ -830,7 +832,7 @@ export class AgentCore {
           }
           try {
             const r = await this.callLLMWith({ ...this.config, ...c });
-            if (r) return r;
+            if (r) return { response: r };
           }
           catch (e: any) {
             if (e instanceof NonRetriableError) throw e; // 401/400 等：立即放弃
@@ -843,7 +845,7 @@ export class AgentCore {
       }
     }
     if (lastErr) logger.error('All model attempts failed:', (lastErr as Error).message);
-    return null;
+    return { response: null, lastError: lastErr instanceof Error ? lastErr.message : String(lastErr) };
   }
 
   /** Run a single model call with a (possibly fallback) config. */
