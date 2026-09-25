@@ -1,4 +1,4 @@
-# AI Agent 桌面应用（self_write）
+# AI Agent 桌面应用
 
 多模态 AI Agent 桌面应用：React 19 + Vite 6 + Tailwind 4 前端，Express + TypeScript +
 better-sqlite3 后端。内置 Agent 循环（DeepSeek-Harness 风格）、LangGraph 风格工作流引擎、
